@@ -235,8 +235,6 @@
             onMoveIssue={handleMoveIssue}
           />
         </div>
-      {:else if loading}
-        <div class="loading">Loading...</div>
       {:else}
         <div class="no-project">
           <p>Add a project to get started</p>
