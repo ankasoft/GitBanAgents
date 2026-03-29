@@ -12,6 +12,7 @@
   let showSettings = false;
   let showNewIssue = false;
   let projectIssues = { backlog: 0, doing: 0, review: 0, done: 0 };
+  let folderInput: HTMLInputElement;
   
   let ws: WebSocket | null = null;
   
@@ -29,17 +30,26 @@
     };
   });
   
-  async function handleAddProject() {
-    const path = prompt('Enter the full path to a git repository:\n\nExample: C:\\Users\\you\\projects\\myrepo');
-    if (!path || !path.trim()) return;
+  function handleFolderPicker() {
+    folderInput?.click();
+  }
+  
+  async function handleFolderChosen() {
+    const files = folderInput.files;
+    if (!files || files.length === 0) return;
     
-    const trimmedPath = path.trim();
+    const file = files[0];
+    const filePath = (file as any).path || file.webkitRelativePath;
+    const folderPath = filePath.split('/')[0].split('\\')[0];
+    const fullPath = (file as any).path?.replace(/[/\\][^/\\]+$/, '') || folderPath;
+    
+    folderInput.value = '';
     
     try {
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: trimmedPath }),
+        body: JSON.stringify({ path: fullPath || folderPath }),
       });
       
       if (!response.ok) {
@@ -189,6 +199,14 @@
   }
 </script>
 
+<input
+  type="file"
+  accept="*"
+  webkitdirectory
+  bind:this={folderInput}
+  on:change={handleFolderChosen}
+  style="display: none;"
+/>
 
 <main data-theme={$settings.theme === 'dark' ? 'dark' : $settings.theme === 'light' ? 'light' : ''}>
   <div class="app">
@@ -210,7 +228,7 @@
         projects={$projects}
         selectedId={$currentProjectId}
         onSelect={handleProjectSelect}
-        onAdd={handleAddProject}
+        onAdd={handleFolderPicker}
         onDelete={handleDeleteProject}
       />
       
