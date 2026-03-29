@@ -2,11 +2,11 @@
   import { onMount } from 'svelte';
   import { api, createWebSocket, type GitHubIssue } from './lib/api';
   import { projects, currentProjectId, issues, selectedIssue, issueComments, agentOutput, agentStatus, currentSessionId } from './lib/stores/app';
-  import Board from './lib/components/Kanban/Board.svelte';
-  import ProjectColumn from './lib/components/Kanban/ProjectColumn.svelte';
-  import SplitView from './lib/components/IssueDetail/SplitView.svelte';
-  import Settings from './lib/components/Settings.svelte';
-  import NewIssue from './lib/components/NewIssue.svelte';
+  import Board from './components/Kanban/Board.svelte';
+  import ProjectColumn from './components/Kanban/ProjectColumn.svelte';
+  import SplitView from './components/IssueDetail/SplitView.svelte';
+  import Settings from './components/Settings.svelte';
+  import NewIssue from './components/NewIssue.svelte';
   
   let showSettings = false;
   let showNewIssue = false;
