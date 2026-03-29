@@ -2,9 +2,22 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { join } from 'path';
 import { existsSync, mkdirSync, rmSync } from 'fs';
-import type { GitWorktree } from '../types/index.js';
+import type { GitWorktree, Issue, Comment } from '../types/index.js';
 
 const execAsync = promisify(exec);
+
+export interface GhIssue {
+  number: number;
+  title: string;
+  body: string;
+  state: 'open' | 'closed';
+  labels: string[];
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  comments: number;
+  url: string;
+}
 
 export class GitService {
   async getRemoteUrl(repoPath: string): Promise<{ owner: string; repo: string } | null> {
@@ -123,6 +136,67 @@ export class GitService {
       };
     } catch {
       return null;
+    }
+  }
+
+  async getGitHubIssues(repoPath: string): Promise<GhIssue[]> {
+    try {
+      const { stdout } = await execAsync(
+        'gh issue list --json number,title,body,state,labels,assignees,createdAt,updatedAt,comments,url',
+        { cwd: repoPath }
+      );
+      const issues = JSON.parse(stdout);
+      return issues.map((issue: any) => ({
+        number: issue.number,
+        title: issue.title,
+        body: issue.body || '',
+        state: issue.state,
+        labels: issue.labels.map((l: any) => l.name),
+        assignees: issue.assignees.map((a: any) => a.login),
+        created_at: issue.createdAt,
+        updated_at: issue.updatedAt,
+        comments: issue.comments,
+        url: issue.url,
+      }));
+    } catch (e) {
+      console.error('Failed to fetch GitHub issues:', e);
+      return [];
+    }
+  }
+
+  async createGitHubIssue(repoPath: string, title: string, body: string, labels: string[] = []): Promise<GhIssue | null> {
+    try {
+      const labelArg = labels.length > 0 ? `--label "${labels.join(',')}"` : '';
+      const { stdout } = await execAsync(
+        `gh issue create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" ${labelArg} --json number,title,body,state,labels,assignees,createdAt,updatedAt,comments,url`,
+        { cwd: repoPath }
+      );
+      const issue = JSON.parse(stdout);
+      return {
+        number: issue.number,
+        title: issue.title,
+        body: issue.body || '',
+        state: issue.state,
+        labels: issue.labels.map((l: any) => l.name),
+        assignees: issue.assignees.map((a: any) => a.login),
+        created_at: issue.createdAt,
+        updated_at: issue.updatedAt,
+        comments: issue.comments,
+        url: issue.url,
+      };
+    } catch (e) {
+      console.error('Failed to create GitHub issue:', e);
+      return null;
+    }
+  }
+
+  async closeGitHubIssue(repoPath: string, issueNumber: number): Promise<boolean> {
+    try {
+      await execAsync(`gh issue close ${issueNumber}`, { cwd: repoPath });
+      return true;
+    } catch (e) {
+      console.error('Failed to close GitHub issue:', e);
+      return false;
     }
   }
 }

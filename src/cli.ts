@@ -127,22 +127,25 @@ async function main() {
     res.json({ success: true });
   });
   
-  app.get('/api/projects/:id/issues', (req, res) => {
+  app.get('/api/projects/:id/issues', async (req, res) => {
     const project = storage.getProject(req.params.id);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    const projectIssues = issues.getIssues(req.params.id);
-    res.json(projectIssues);
+    const ghIssues = await git.getGitHubIssues(project.path);
+    res.json(ghIssues);
   });
   
-  app.post('/api/projects/:id/issues', (req, res) => {
+  app.post('/api/projects/:id/issues', async (req, res) => {
     const project = storage.getProject(req.params.id);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
     const { title, body, labels } = req.body;
-    const issue = issues.createIssue(req.params.id, title, body || '', labels || []);
+    const issue = await git.createGitHubIssue(project.path, title, body || '', labels || []);
+    if (!issue) {
+      return res.status(500).json({ error: 'Failed to create GitHub issue. Make sure gh CLI is authenticated.' });
+    }
     res.json(issue);
   });
   
