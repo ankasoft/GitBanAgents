@@ -16,9 +16,19 @@
     if (days < 30) return `${Math.floor(days / 7)}w ago`;
     return `${Math.floor(days / 30)}mo ago`;
   }
+  
+  function handleDragStart(e: DragEvent) {
+    e.dataTransfer?.setData('application/json', JSON.stringify(issue));
+    e.dataTransfer!.effectAllowed = 'move';
+  }
 </script>
 
-<button class="issue-card" on:click={onClick}>
+<button
+  class="issue-card"
+  on:click={onClick}
+  draggable="true"
+  on:dragstart={handleDragStart}
+>
   <div class="header">
     <span class="number">#{issue.number}</span>
     <span class="date">{formatDate(issue.updated_at)}</span>

@@ -1,12 +1,16 @@
 <script lang="ts">
   import { githubToken, settings, projects, currentProjectId, type Project } from './lib/stores/settings';
-  import { getIssues, getComments, type GitHubIssue, type GitHubComment } from './lib/services/github';
+  import { getIssues, getComments, createIssue, updateIssue, type GitHubIssue, type GitHubComment } from './lib/services/github';
   import Setup from './lib/components/Setup.svelte';
   import Board from './lib/components/Kanban/Board.svelte';
   import ProjectColumn from './lib/components/Kanban/ProjectColumn.svelte';
   import SplitView from './lib/components/IssueDetail/SplitView.svelte';
+  import Settings from './lib/components/Settings.svelte';
+  import NewIssue from './lib/components/NewIssue.svelte';
   
   let showSetup = true;
+  let showSettings = false;
+  let showNewIssue = false;
   let selectedIssue: GitHubIssue | null = null;
   let issueComments: GitHubComment[] = [];
   let issues: GitHubIssue[] = [];
@@ -24,6 +28,9 @@
     currentProjectId.subscribe(id => {
       if (id && list.length > 0) {
         currentProject = list.find(p => p.id === id) || null;
+        if (currentProject) {
+          loadIssues();
+        }
       }
     })();
   });
@@ -43,13 +50,16 @@
     const labels = ['backlog', 'doing', 'review', 'done'];
     
     issues.forEach(issue => {
+      const issueLabels = issue.labels.map(l => l.toLowerCase());
+      let found = false;
       for (const label of labels) {
-        if (issue.labels.some(l => l.toLowerCase() === label)) {
+        if (issueLabels.includes(label)) {
           counts[label as keyof typeof counts]++;
+          found = true;
           break;
         }
       }
-      if (!labels.some(l => issue.labels.some(il => il.toLowerCase() === l))) {
+      if (!found) {
         counts.backlog++;
       }
     });
@@ -64,6 +74,29 @@
     } catch (e) {
       console.error('Failed to load comments:', e);
       issueComments = [];
+    }
+  }
+  
+  async function handleCreateIssue(e: CustomEvent<{ title: string; body: string; labels: string[] }>) {
+    if (!currentProject) return;
+    try {
+      await createIssue(currentProject.owner, currentProject.repo, e.detail.title, e.detail.body, e.detail.labels);
+      await loadIssues();
+    } catch (e) {
+      console.error('Failed to create issue:', e);
+    }
+  }
+  
+  async function handleMoveIssue(issue: GitHubIssue, newStatus: string) {
+    if (!currentProject) return;
+    const oldLabels = issue.labels;
+    const newLabels = [...oldLabels.filter(l => !['backlog', 'doing', 'review', 'done'].includes(l.toLowerCase())), newStatus];
+    
+    try {
+      await updateIssue(currentProject.owner, currentProject.repo, issue.number, { labels: newLabels });
+      await loadIssues();
+    } catch (e) {
+      console.error('Failed to move issue:', e);
     }
   }
   
@@ -86,8 +119,10 @@
     agentOutput += '\n⏹ Agent stopped by user';
   }
   
-  function handleMoveToReview() {
-    console.log('Move to review');
+  async function handleMoveToReview() {
+    if (selectedIssue && currentProject) {
+      await handleMoveIssue(selectedIssue, 'review');
+    }
     handleBack();
   }
   
@@ -113,7 +148,8 @@
           {/if}
         </div>
         <div class="actions">
-          <button class="settings-btn">Settings</button>
+          <button class="new-issue-btn" on:click={() => showNewIssue = true}>+ New Issue</button>
+          <button class="settings-btn" on:click={() => showSettings = true}>Settings</button>
         </div>
       </header>
       
@@ -151,6 +187,7 @@
                 {issues}
                 onIssueClick={handleIssueClick}
                 onPlay={handlePlay}
+                onMoveIssue={handleMoveIssue}
               />
             {:else}
               <div class="no-project">
@@ -161,6 +198,17 @@
         {/if}
       </div>
     </div>
+    
+    {#if showSettings}
+      <Settings onClose={() => showSettings = false} />
+    {/if}
+    
+    {#if showNewIssue}
+      <NewIssue
+        onClose={() => showNewIssue = false}
+        on:create={handleCreateIssue}
+      />
+    {/if}
   {/if}
 </main>
 
@@ -200,6 +248,20 @@
   .actions {
     display: flex;
     gap: 0.5rem;
+  }
+  
+  .new-issue-btn {
+    padding: 0.375rem 0.75rem;
+    background: var(--color-primary);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: white;
+  }
+  
+  .new-issue-btn:hover {
+    opacity: 0.9;
   }
   
   .settings-btn {

@@ -7,11 +7,35 @@
   export let issues: GitHubIssue[] = [];
   export let onIssueClick: (issue: GitHubIssue) => void = () => {};
   export let onPlay?: (issue: GitHubIssue) => void;
+  export let onDrop?: (e: DragEvent) => void;
   
   let isDragOver = false;
+  
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    isDragOver = true;
+  }
+  
+  function handleDragLeave() {
+    isDragOver = false;
+  }
+  
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    isDragOver = false;
+    onDrop?.(e);
+  }
 </script>
 
-<div class="column" class:drag-over={isDragOver}>
+<div
+  class="column"
+  class:drag-over={isDragOver}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
+  role="region"
+  aria-label="{title} column"
+>
   <div class="column-header" style="border-color: {color}">
     <span class="title">{title}</span>
     <span class="count">{issues.length}</span>
@@ -24,7 +48,7 @@
             ▶
           </button>
         {/if}
-        <IssueCard {issue} onClick={() => onIssueClick(issue)} />
+        <IssueCard {issue} {onIssueClick} />
       </div>
     {/each}
     {#if issues.length === 0}
@@ -43,10 +67,13 @@
     background: var(--color-bg-secondary, #f5f5f5);
     border-radius: 8px;
     overflow: hidden;
+    transition: background 0.2s;
   }
   
   .column.drag-over {
-    background: var(--color-border);
+    background: rgba(59, 130, 246, 0.1);
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -2px;
   }
   
   .column-header {

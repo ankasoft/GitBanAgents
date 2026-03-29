@@ -5,6 +5,7 @@
   export let issues: GitHubIssue[] = [];
   export let onIssueClick: (issue: GitHubIssue) => void = () => {};
   export let onPlay: (issue: GitHubIssue) => void = () => {};
+  export let onMoveIssue: (issue: GitHubIssue, newStatus: string) => void = () => {};
   
   const COLUMNS = [
     { id: 'backlog', title: 'Backlog', color: '#64748b' },
@@ -26,6 +27,14 @@
       return issue.labels.some(l => l.toLowerCase() === status);
     });
   }
+  
+  function handleDrop(e: DragEvent, columnId: string) {
+    const issueJson = e.dataTransfer?.getData('application/json');
+    if (issueJson) {
+      const issue: GitHubIssue = JSON.parse(issueJson);
+      onMoveIssue(issue, columnId);
+    }
+  }
 </script>
 
 <div class="board">
@@ -36,6 +45,7 @@
       issues={getIssuesByStatus(column.id)}
       {onIssueClick}
       onPlay={column.id === 'backlog' ? onPlay : undefined}
+      onDrop={(e) => handleDrop(e, column.id)}
     />
   {/each}
 </div>
