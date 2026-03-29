@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { settings } from './lib/stores/app';
+  import { settings } from '../lib/stores/app';
   
   export let onClose: () => void = () => {};
   
