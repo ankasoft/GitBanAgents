@@ -1,44 +1,51 @@
 <script lang="ts">
-  import { githubToken, settings, projects, currentProjectId, type Project } from './lib/stores/settings';
-  import { getIssues, getComments, createIssue, updateIssue, type GitHubIssue, type GitHubComment } from './lib/services/github';
-  import Setup from './lib/components/Setup.svelte';
+  import { onMount } from 'svelte';
+  import { api, createWebSocket, type GitHubIssue } from './lib/api';
+  import { projects, currentProjectId, issues, selectedIssue, issueComments, agentOutput, agentStatus, currentSessionId } from './lib/stores/app';
   import Board from './lib/components/Kanban/Board.svelte';
   import ProjectColumn from './lib/components/Kanban/ProjectColumn.svelte';
   import SplitView from './lib/components/IssueDetail/SplitView.svelte';
   import Settings from './lib/components/Settings.svelte';
   import NewIssue from './lib/components/NewIssue.svelte';
   
-  let showSetup = true;
   let showSettings = false;
   let showNewIssue = false;
-  let selectedIssue: GitHubIssue | null = null;
-  let issueComments: GitHubComment[] = [];
-  let issues: GitHubIssue[] = [];
-  let agentOutput = '';
-  let agentStatus: 'idle' | 'running' | 'completed' | 'failed' = 'idle';
-  
-  let currentProject: Project | null = null;
+  let loading = true;
   let projectIssues = { backlog: 0, doing: 0, review: 0, done: 0 };
   
-  githubToken.subscribe(token => {
-    showSetup = !token;
-  });
+  let ws: WebSocket | null = null;
   
-  projects.subscribe(list => {
-    currentProjectId.subscribe(id => {
-      if (id && list.length > 0) {
-        currentProject = list.find(p => p.id === id) || null;
-        if (currentProject) {
-          loadIssues();
-        }
+  onMount(() => {
+    ws = createWebSocket((msg) => {
+      if (msg.type === 'output' && msg.sessionId === $currentSessionId) {
+        agentOutput.update(o => o + (msg.output || ''));
+      } else if (msg.type === 'close' && msg.sessionId === $currentSessionId) {
+        agentStatus.set(msg.exitCode === 0 ? 'completed' : 'failed');
       }
-    })();
+    });
+    
+    loadProjects();
+    
+    return () => {
+      ws?.close();
+    };
   });
   
-  async function loadIssues() {
-    if (!currentProject) return;
+  async function loadProjects() {
     try {
-      issues = await getIssues(currentProject.owner, currentProject.repo);
+      const data = await api.getProjects();
+      projects.set(data);
+      loading = false;
+    } catch (e) {
+      console.error('Failed to load projects:', e);
+      loading = false;
+    }
+  }
+  
+  async function loadIssues(projectId: string) {
+    try {
+      const data = await api.getIssues(projectId);
+      issues.set(data);
       updateIssueCounts();
     } catch (e) {
       console.error('Failed to load issues:', e);
@@ -49,7 +56,7 @@
     const counts = { backlog: 0, doing: 0, review: 0, done: 0 };
     const labels = ['backlog', 'doing', 'review', 'done'];
     
-    issues.forEach(issue => {
+    $issues.forEach(issue => {
       const issueLabels = issue.labels.map(l => l.toLowerCase());
       let found = false;
       for (const label of labels) {
@@ -59,156 +66,185 @@
           break;
         }
       }
-      if (!found) {
-        counts.backlog++;
-      }
+      if (!found) counts.backlog++;
     });
     projectIssues = counts;
   }
   
-  async function handleIssueClick(issue: GitHubIssue) {
-    if (!currentProject) return;
-    selectedIssue = issue;
+  async function handleProjectSelect(id: string) {
+    currentProjectId.set(id);
+    await loadIssues(id);
+  }
+  
+  async function handleAddProject() {
+    const path = prompt('Enter project path (must be a git repo):');
+    if (!path) return;
+    
     try {
-      issueComments = await getComments(currentProject.owner, currentProject.repo, issue.number);
+      await api.addProject({
+        name: path.split('/').pop() || path,
+        path,
+        owner: '',
+        repo: '',
+        agentType: 'claude',
+      });
+      await loadProjects();
     } catch (e) {
-      console.error('Failed to load comments:', e);
-      issueComments = [];
+      console.error('Failed to add project:', e);
     }
   }
   
-  async function handleCreateIssue(e: CustomEvent<{ title: string; body: string; labels: string[] }>) {
-    if (!currentProject) return;
+  async function handleIssueClick(issue: GitHubIssue) {
+    selectedIssue.set(issue);
     try {
-      await createIssue(currentProject.owner, currentProject.repo, e.detail.title, e.detail.body, e.detail.labels);
-      await loadIssues();
+      const comments = await api.getComments($currentProjectId!, issue.number);
+      issueComments.set(comments);
     } catch (e) {
-      console.error('Failed to create issue:', e);
+      console.error('Failed to load comments:', e);
+      issueComments.set([]);
     }
   }
   
   async function handleMoveIssue(issue: GitHubIssue, newStatus: string) {
-    if (!currentProject) return;
-    const oldLabels = issue.labels;
-    const newLabels = [...oldLabels.filter(l => !['backlog', 'doing', 'review', 'done'].includes(l.toLowerCase())), newStatus];
-    
+    if (!$currentProjectId) return;
+    const newLabels = [...issue.labels.filter(l => !['backlog', 'doing', 'review', 'done'].includes(l.toLowerCase())), newStatus];
     try {
-      await updateIssue(currentProject.owner, currentProject.repo, issue.number, { labels: newLabels });
-      await loadIssues();
+      await api.updateIssue($currentProjectId, issue.number, { labels: newLabels });
+      await loadIssues($currentProjectId);
     } catch (e) {
       console.error('Failed to move issue:', e);
     }
   }
   
-  function handleBack() {
-    selectedIssue = null;
-    issueComments = [];
-    agentOutput = '';
-    agentStatus = 'idle';
+  async function handleCreateIssue(e: CustomEvent<{ title: string; body: string; labels: string[] }>) {
+    if (!$currentProjectId) return;
+    try {
+      await api.createIssue($currentProjectId, e.detail.title, e.detail.body, e.detail.labels);
+      await loadIssues($currentProjectId);
+      showNewIssue = false;
+    } catch (e) {
+      console.error('Failed to create issue:', e);
+    }
   }
   
-  function handlePlay(issue: GitHubIssue) {
-    console.log('Play agent for issue:', issue.number);
-    selectedIssue = issue;
-    agentStatus = 'running';
-    agentOutput = '🤖 Agent started...\n';
+  async function handlePlay(issue: GitHubIssue) {
+    if (!$currentProjectId) return;
+    selectedIssue.set(issue);
+    agentOutput.set('🤖 Agent starting...\n');
+    agentStatus.set('running');
+    
+    try {
+      const { sessionId } = await api.startAgent($currentProjectId, issue.number);
+      currentSessionId.set(sessionId);
+    } catch (e) {
+      console.error('Failed to start agent:', e);
+      agentStatus.set('failed');
+      agentOutput.update(o => o + `\n❌ Error: ${e}\n`);
+    }
   }
   
-  function handleStop() {
-    agentStatus = 'failed';
-    agentOutput += '\n⏹ Agent stopped by user';
+  async function handleStop() {
+    if (!$currentSessionId) return;
+    try {
+      await api.stopAgent($currentSessionId);
+      agentStatus.set('failed');
+      agentOutput.update(o => o + '\n⏹ Agent stopped by user\n');
+    } catch (e) {
+      console.error('Failed to stop agent:', e);
+    }
   }
   
   async function handleMoveToReview() {
-    if (selectedIssue && currentProject) {
-      await handleMoveIssue(selectedIssue, 'review');
+    if (!$selectedIssue || !$currentProjectId) return;
+    const newLabels = [...$selectedIssue.labels.filter(l => !['backlog', 'doing', 'review', 'done'].includes(l.toLowerCase())), 'review'];
+    try {
+      await api.updateIssue($currentProjectId, $selectedIssue.number, { labels: newLabels });
+      await loadIssues($currentProjectId);
+      handleBack();
+    } catch (e) {
+      console.error('Failed to move to review:', e);
     }
-    handleBack();
   }
   
-  function handleProjectSelect(id: string) {
-    currentProjectId.set(id);
-  }
-  
-  function handleAddProject() {
-    console.log('Add project');
+  function handleBack() {
+    selectedIssue.set(null);
+    issueComments.set([]);
+    agentOutput.set('');
+    agentStatus.set('idle');
+    currentSessionId.set(null);
   }
 </script>
 
-<main data-theme={$settings.theme === 'dark' ? 'dark' : $settings.theme === 'light' ? 'light' : ''}>
-  {#if showSetup}
-    <Setup />
-  {:else}
-    <div class="app">
-      <header class="topbar">
-        <div class="logo">GitBan Agent</div>
-        <div class="repo-info">
-          {#if currentProject}
-            {currentProject.owner}/{currentProject.repo}
-          {/if}
-        </div>
-        <div class="actions">
-          <button class="new-issue-btn" on:click={() => showNewIssue = true}>+ New Issue</button>
-          <button class="settings-btn" on:click={() => showSettings = true}>Settings</button>
-        </div>
-      </header>
-      
-      <div class="main-content">
-        <ProjectColumn
-          projects={$projects}
-          selectedId={$currentProjectId}
-          onSelect={handleProjectSelect}
-          onAdd={handleAddProject}
-        />
-        
-        {#if selectedIssue}
-          <SplitView
-            issue={selectedIssue}
-            comments={issueComments}
-            {agentOutput}
-            {agentStatus}
-            onBack={handleBack}
-            onStop={handleStop}
-            onMoveToReview={handleMoveToReview}
-          />
-        {:else}
-          <div class="board-container">
-            {#if currentProject}
-              <div class="board-header">
-                <button class="refresh-btn" on:click={loadIssues}>Refresh</button>
-                <div class="issue-counts">
-                  <span class="count backlog">{projectIssues.backlog} backlog</span>
-                  <span class="count doing">{projectIssues.doing} doing</span>
-                  <span class="count review">{projectIssues.review} review</span>
-                  <span class="count done">{projectIssues.done} done</span>
-                </div>
-              </div>
-              <Board
-                {issues}
-                onIssueClick={handleIssueClick}
-                onPlay={handlePlay}
-                onMoveIssue={handleMoveIssue}
-              />
-            {:else}
-              <div class="no-project">
-                <p>Select or add a project to get started</p>
-              </div>
-            {/if}
-          </div>
+<main>
+  <div class="app">
+    <header class="topbar">
+      <div class="logo">GitBan Agent</div>
+      <div class="repo-info">
+        {#if $currentProjectId && $projects.find(p => p.id === $currentProjectId)}
+          {$projects.find(p => p.id === $currentProjectId)?.name}
         {/if}
       </div>
-    </div>
+      <div class="actions">
+        <button class="new-issue-btn" on:click={() => showNewIssue = true}>+ New Issue</button>
+        <button class="settings-btn" on:click={() => showSettings = true}>Settings</button>
+      </div>
+    </header>
     
-    {#if showSettings}
-      <Settings onClose={() => showSettings = false} />
-    {/if}
-    
-    {#if showNewIssue}
-      <NewIssue
-        onClose={() => showNewIssue = false}
-        on:create={handleCreateIssue}
+    <div class="main-content">
+      <ProjectColumn
+        projects={$projects}
+        selectedId={$currentProjectId}
+        onSelect={handleProjectSelect}
+        onAdd={handleAddProject}
       />
-    {/if}
+      
+      {#if $selectedIssue}
+        <SplitView
+          issue={$selectedIssue}
+          comments={$issueComments}
+          agentOutput={$agentOutput}
+          agentStatus={$agentStatus}
+          onBack={handleBack}
+          onStop={handleStop}
+          onMoveToReview={handleMoveToReview}
+        />
+      {:else if $currentProjectId}
+        <div class="board-container">
+          <div class="board-header">
+            <button class="refresh-btn" on:click={() => loadIssues($currentProjectId!)}>Refresh</button>
+            <div class="issue-counts">
+              <span class="count backlog">{projectIssues.backlog} backlog</span>
+              <span class="count doing">{projectIssues.doing} doing</span>
+              <span class="count review">{projectIssues.review} review</span>
+              <span class="count done">{projectIssues.done} done</span>
+            </div>
+          </div>
+          <Board
+            issues={$issues}
+            onIssueClick={handleIssueClick}
+            onPlay={handlePlay}
+            onMoveIssue={handleMoveIssue}
+          />
+        </div>
+      {:else if loading}
+        <div class="loading">Loading...</div>
+      {:else}
+        <div class="no-project">
+          <p>Add a project to get started</p>
+        </div>
+      {/if}
+    </div>
+  </div>
+  
+  {#if showSettings}
+    <Settings onClose={() => showSettings = false} />
+  {/if}
+  
+  {#if showNewIssue}
+    <NewIssue
+      onClose={() => showNewIssue = false}
+      on:create={handleCreateIssue}
+    />
   {/if}
 </main>
 
@@ -260,10 +296,6 @@
     color: white;
   }
   
-  .new-issue-btn:hover {
-    opacity: 0.9;
-  }
-  
   .settings-btn {
     padding: 0.375rem 0.75rem;
     background: transparent;
@@ -272,10 +304,6 @@
     cursor: pointer;
     font-size: 0.875rem;
     color: var(--color-text);
-  }
-  
-  .settings-btn:hover {
-    background: var(--color-border);
   }
   
   .main-content {
@@ -309,10 +337,6 @@
     font-size: 0.8rem;
   }
   
-  .refresh-btn:hover {
-    opacity: 0.9;
-  }
-  
   .issue-counts {
     display: flex;
     gap: 1rem;
@@ -329,6 +353,7 @@
   .count.review { background: #8b5cf6; color: white; }
   .count.done { background: #22c55e; color: white; }
   
+  .loading,
   .no-project {
     flex: 1;
     display: flex;
