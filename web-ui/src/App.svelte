@@ -12,7 +12,6 @@
   let showSettings = false;
   let showNewIssue = false;
   let projectIssues = { backlog: 0, doing: 0, review: 0, done: 0 };
-  let folderInput: HTMLInputElement;
   
   let ws: WebSocket | null = null;
   
@@ -30,34 +29,34 @@
     };
   });
   
-  function handleFolderSelect() {
-    folderInput?.click();
-  }
-  
-  async   function handleFolderChosen(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const files = input.files;
-    if (!files || files.length === 0) return;
+  async function handleAddProject() {
+    const path = prompt('Enter git repository folder path:');
+    if (!path) return;
     
-    const path = files[0].webkitRelativePath.split('/')[0];
-    const fullPath = files[0].path || path;
-    
-    const newProject: Project = {
-      id: crypto.randomUUID(),
-      name: path,
-      path: fullPath || path,
-      owner: '',
-      repo: '',
-      agent: 'claude',
-      autoPR: false,
-      baseBranch: 'main',
-      customAgentArgs: '',
-      timeout: 1800,
-      retryCount: 2,
-    };
-    
-    projects.add(newProject);
-    input.value = '';
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to add project');
+        return;
+      }
+      
+      const project = await response.json();
+      projects.add(project);
+      
+      if (project) {
+        currentProjectId.set(project.id);
+        await loadIssues(project.id);
+      }
+    } catch (e) {
+      console.error('Failed to add project:', e);
+      alert('Failed to add project. Make sure the folder is a git repository.');
+    }
   }
   
   async function loadIssues(projectId: string) {
@@ -175,14 +174,7 @@
   }
 </script>
 
-<input
-  type="file"
-  accept="*"
-  webkitdirectory
-  bind:this={folderInput}
-  on:change={handleFolderChosen}
-  style="display: none;"
-/>
+
 
 <main data-theme={$settings.theme === 'dark' ? 'dark' : $settings.theme === 'light' ? 'light' : ''}>
   <div class="app">
@@ -204,7 +196,7 @@
         projects={$projects}
         selectedId={$currentProjectId}
         onSelect={handleProjectSelect}
-        onAdd={handleFolderSelect}
+        onAdd={handleAddProject}
       />
       
       {#if $selectedIssue}
@@ -360,7 +352,6 @@
   .count.review { background: #8b5cf6; color: white; }
   .count.done { background: #22c55e; color: white; }
   
-  .loading,
   .no-project {
     flex: 1;
     display: flex;

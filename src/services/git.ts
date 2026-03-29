@@ -106,4 +106,23 @@ export class GitService {
       return false;
     }
   }
+
+  async getRepoInfo(repoPath: string): Promise<{ owner: string; repo: string; branch: string } | null> {
+    try {
+      const [remote, branch] = await Promise.all([
+        this.getRemoteUrl(repoPath),
+        this.getCurrentBranch(repoPath)
+      ]);
+      
+      if (!remote) return null;
+      
+      return {
+        owner: remote.owner,
+        repo: remote.repo,
+        branch: branch || 'main'
+      };
+    } catch {
+      return null;
+    }
+  }
 }

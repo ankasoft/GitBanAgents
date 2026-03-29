@@ -93,16 +93,28 @@ async function main() {
     res.json(projects);
   });
   
-  app.post('/api/projects', (req, res) => {
-    const { name, path, owner, repo, agentType } = req.body;
+  app.post('/api/projects', async (req, res) => {
+    const { name, path, agentType } = req.body;
+    
+    if (!path) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+    
+    const isGit = await git.isGitRepo(path);
+    if (!isGit) {
+      return res.status(400).json({ error: 'Selected folder is not a git repository. Please run "git init" first.' });
+    }
+    
+    const repoInfo = await git.getRepoInfo(path);
+    
     const project = storage.addProject({ 
-      name, 
+      name: name || path.split(/[/\\]/).pop() || 'Project', 
       path, 
-      owner, 
-      repo, 
+      owner: repoInfo?.owner || '',
+      repo: repoInfo?.repo || '',
       agentType: agentType || 'claude',
       autoPR: false,
-      baseBranch: 'main',
+      baseBranch: repoInfo?.branch || 'main',
       customAgentArgs: '',
       timeout: 1800,
       retryCount: 2,
