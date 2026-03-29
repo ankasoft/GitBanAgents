@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api, createWebSocket, type GitHubIssue } from './lib/api';
   import { projects, currentProjectId, issues, selectedIssue, issueComments, agentOutput, agentStatus, currentSessionId } from './lib/stores/app';
+  import { settings } from './stores/settings';
   import Board from './components/Kanban/Board.svelte';
   import ProjectColumn from './components/Kanban/ProjectColumn.svelte';
   import SplitView from './components/IssueDetail/SplitView.svelte';
@@ -175,7 +176,7 @@
   }
 </script>
 
-<main>
+<main data-theme={$settings.theme === 'dark' ? 'dark' : $settings.theme === 'light' ? 'light' : ''}>
   <div class="app">
     <header class="topbar">
       <div class="logo">GitBan Agent</div>
