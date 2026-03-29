@@ -1,14 +1,19 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createInterface } from 'readline';
-import { addComment, type GitHubIssue } from './github';
 import { createWorktree, commitChanges, pushBranch, removeWorktree, type GitWorktree } from './git';
 
 export type AgentType = 'claude' | 'opencode' | 'codex';
 export type AgentStatus = 'idle' | 'running' | 'completed' | 'failed' | 'timeout';
 
+export interface Issue {
+  number: number;
+  title: string;
+  body: string | null;
+}
+
 export interface AgentRun {
   id: string;
-  issue: GitHubIssue;
+  issue: Issue;
   worktree: GitWorktree | null;
   status: AgentStatus;
   output: string;
@@ -20,8 +25,6 @@ export interface AgentRun {
 export interface AgentConfig {
   type: AgentType;
   repoPath: string;
-  owner: string;
-  repo: string;
   customArgs?: string;
   timeout?: number;
   retryCount?: number;
@@ -71,7 +74,7 @@ function buildAgentCommand(
 
 export async function startAgent(
   config: AgentConfig,
-  issue: GitHubIssue,
+  issue: Issue,
   onOutput: (output: string) => void,
   onStatusChange: (status: AgentStatus) => void
 ): Promise<AgentRun> {
@@ -87,8 +90,6 @@ export async function startAgent(
   };
   
   try {
-    await addComment(config.owner, config.repo, issue.number, `🤖 Agent started: ${config.type}`);
-    
     run.worktree = await createWorktree(config.repoPath, issue.number, issue.title);
     
     const instruction = `Issue #${issue.number}: ${issue.title}\n\n${issue.body || 'No description'}`;
@@ -132,11 +133,9 @@ export async function startAgent(
             issue.title
           );
           
-          const commitMsg = `✅ Agent completed successfully\nCommit: ${commitResult}`;
+          const commitMsg = `Agent completed successfully\nCommit: ${commitResult}`;
           run.output += `\n${commitMsg}\n`;
           onOutput(`\n${commitMsg}\n`);
-          
-          await addComment(config.owner, config.repo, issue.number, commitMsg);
           
           if (config.pushOnComplete) {
             await pushBranch(run.worktree!.path);
@@ -147,7 +146,7 @@ export async function startAgent(
             onOutput('Auto-PR creation coming soon...\n');
           }
         } catch (e) {
-          const errorMsg = `⚠️ Commit failed: ${e}`;
+          const errorMsg = `Commit failed: ${e}`;
           run.output += `\n${errorMsg}\n`;
           onOutput(`\n${errorMsg}\n`);
         }
@@ -155,23 +154,19 @@ export async function startAgent(
         run.status = 'failed';
         onStatusChange('failed');
         
-        const errorMsg = `❌ Agent exited with code ${code}`;
+        const errorMsg = `Agent exited with code ${code}`;
         run.output += `\n${errorMsg}\n`;
         onOutput(`\n${errorMsg}\n`);
-        
-        await addComment(config.owner, config.repo, issue.number, `${errorMsg}\n\nOutput:\n\`\`\`\n${run.output.substring(0, 1000)}\n\`\`\``);
       }
     });
     
-    child.on('error', async (err) => {
+    child.on('error', (err) => {
       run.status = 'failed';
       onStatusChange('failed');
       
-      const errorMsg = `❌ Error: ${err.message}`;
+      const errorMsg = `Error: ${err.message}`;
       run.output += `\n${errorMsg}\n`;
       onOutput(`\n${errorMsg}\n`);
-      
-      await addComment(config.owner, config.repo, issue.number, `${errorMsg}\n\nOutput:\n\`\`\`\n${run.output.substring(0, 1000)}\n\`\`\``);
     });
     
     if (config.timeout) {
@@ -180,8 +175,6 @@ export async function startAgent(
           run.status = 'timeout';
           onStatusChange('timeout');
           stopAgent(run);
-          
-          addComment(config.owner, config.repo, issue.number, `⏰ Agent timed out after ${config.timeout}ms`);
         }
       }, config.timeout * 1000);
     }
@@ -189,7 +182,7 @@ export async function startAgent(
   } catch (e) {
     run.status = 'failed';
     onStatusChange('failed');
-    const errorMsg = `❌ Setup error: ${e}`;
+    const errorMsg = `Setup error: ${e}`;
     run.output += `\n${errorMsg}\n`;
     onOutput(`\n${errorMsg}\n`);
   }

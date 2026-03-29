@@ -104,4 +104,3 @@ function createProjectsStore() {
 export const settings = createSettingsStore();
 export const projects = createProjectsStore();
 export const currentProjectId = writable<string | null>(null);
-export const githubToken = writable<string | null>(null);
