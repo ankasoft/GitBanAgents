@@ -12,6 +12,7 @@
   let showSettings = false;
   let showNewIssue = false;
   let projectIssues = { backlog: 0, doing: 0, review: 0, done: 0 };
+  let loadingIssues = false;
   let folderInput: HTMLInputElement;
   
   let ws: WebSocket | null = null;
@@ -72,12 +73,15 @@
   }
   
   async function loadIssues(projectId: string) {
+    loadingIssues = true;
     try {
       const data = await api.getIssues(projectId);
       issues.set(data);
       updateIssueCounts();
     } catch (e) {
       console.error('Failed to load issues:', e);
+    } finally {
+      loadingIssues = false;
     }
   }
   
@@ -247,18 +251,29 @@
           <div class="board-header">
             <button class="refresh-btn" on:click={() => loadIssues($currentProjectId!)}>Refresh</button>
             <div class="issue-counts">
-              <span class="count backlog">{projectIssues.backlog} backlog</span>
-              <span class="count doing">{projectIssues.doing} doing</span>
-              <span class="count review">{projectIssues.review} review</span>
-              <span class="count done">{projectIssues.done} done</span>
+              {#if loadingIssues}
+                <span class="loading-indicator">Loading...</span>
+              {:else}
+                <span class="count backlog">{projectIssues.backlog} backlog</span>
+                <span class="count doing">{projectIssues.doing} doing</span>
+                <span class="count review">{projectIssues.review} review</span>
+                <span class="count done">{projectIssues.done} done</span>
+              {/if}
             </div>
           </div>
-          <Board
-            issues={$issues}
-            onIssueClick={handleIssueClick}
-            onPlay={handlePlay}
-            onMoveIssue={handleMoveIssue}
-          />
+          {#if loadingIssues}
+            <div class="loading-board">
+              <div class="spinner"></div>
+              <span>Loading issues...</span>
+            </div>
+          {:else}
+            <Board
+              issues={$issues}
+              onIssueClick={handleIssueClick}
+              onPlay={handlePlay}
+              onMoveIssue={handleMoveIssue}
+            />
+          {/if}
         </div>
       {:else}
         <div class="no-project">
@@ -384,6 +399,35 @@
   .count.doing { background: #f59e0b; color: white; }
   .count.review { background: #8b5cf6; color: white; }
   .count.done { background: #22c55e; color: white; }
+  
+  .loading-indicator {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary, #999);
+  }
+  
+  .loading-board {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--color-text-secondary, #999);
+    font-size: 0.875rem;
+  }
+  
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
   
   .no-project {
     flex: 1;
