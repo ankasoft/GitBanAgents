@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GitHubIssue, GitHubComment } from '../../services/github';
+  import type { GitHubIssue, GitHubComment } from '../../lib/api';
   import IssuePanel from './IssuePanel.svelte';
   import AgentTerminal from './AgentTerminal.svelte';
   

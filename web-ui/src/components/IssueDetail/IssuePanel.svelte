@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { GitHubIssue, GitHubComment } from '../../services/github';
-  import { onMount } from 'svelte';
+  import type { GitHubIssue, GitHubComment } from '../../lib/api';
   
   export let issue: GitHubIssue;
   export let comments: GitHubComment[] = [];

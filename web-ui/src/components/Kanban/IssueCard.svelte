@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GitHubIssue } from '../../services/github';
+  import type { GitHubIssue } from '../../lib/api';
   
   export let issue: GitHubIssue;
   export let onClick: () => void = () => {};

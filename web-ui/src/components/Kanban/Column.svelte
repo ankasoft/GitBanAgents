@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GitHubIssue } from '../../services/github';
+  import type { GitHubIssue } from '../../lib/api';
   import IssueCard from './IssueCard.svelte';
   
   export let title: string;

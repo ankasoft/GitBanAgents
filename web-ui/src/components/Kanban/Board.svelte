@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GitHubIssue } from '../../services/github';
+  import type { GitHubIssue } from '../../lib/api';
   import Column from './Column.svelte';
   
   export let issues: GitHubIssue[] = [];

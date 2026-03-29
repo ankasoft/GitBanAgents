@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Project } from '../../stores/settings';
+  import type { Project } from '../../lib/api';
   
   export let projects: Project[] = [];
   export let selectedId: string | null = null;

@@ -1,19 +1,12 @@
 <script lang="ts">
-  import { settings, githubToken, type Settings } from '../stores/settings';
+  import { settings } from './lib/stores/app';
   
   export let onClose: () => void = () => {};
   
-  let localSettings: Settings = { ...$settings };
+  let localSettings = { ...$settings };
   
   function handleSave() {
     settings.set(localSettings);
-    onClose();
-  }
-  
-  function handleLogout() {
-    githubToken.set(null);
-    localStorage.removeItem('gitban_settings');
-    localStorage.removeItem('gitban_projects');
     onClose();
   }
 </script>
@@ -48,41 +41,12 @@
       </section>
       
       <section>
-        <h3>GitHub</h3>
-        <p class="info">Connected</p>
-      </section>
-      
-      <section>
-        <h3>Agent Defaults</h3>
+        <h3>Notifications</h3>
         
         <div class="setting-row">
-          <label for="defaultAgent">Default Agent</label>
-          <select id="defaultAgent" bind:value={localSettings.defaultAgent}>
-            <option value="claude">Claude Code</option>
-            <option value="opencode">Opencode</option>
-            <option value="codex">Codex</option>
-          </select>
-        </div>
-        
-        <div class="setting-row">
-          <label for="pushOnComplete">Auto-push on complete</label>
-          <input type="checkbox" id="pushOnComplete" bind:checked={localSettings.pushOnComplete} />
-        </div>
-        
-        <div class="setting-row">
-          <label for="notifications">Notifications</label>
+          <label for="notifications">Enable Notifications</label>
           <input type="checkbox" id="notifications" bind:checked={localSettings.notifications} />
         </div>
-        
-        <div class="setting-row">
-          <label for="branchProtection">Branch Protection</label>
-          <input type="checkbox" id="branchProtection" bind:checked={localSettings.branchProtection} />
-        </div>
-      </section>
-      
-      <section>
-        <h3>Account</h3>
-        <button class="danger-btn" on:click={handleLogout}>Logout</button>
       </section>
     </div>
     
@@ -189,25 +153,6 @@
   .setting-row input[type="checkbox"] {
     width: 18px;
     height: 18px;
-  }
-  
-  .info {
-    font-size: 0.875rem;
-    color: var(--color-text-secondary, #666);
-  }
-  
-  .danger-btn {
-    padding: 0.5rem 1rem;
-    background: #dc2626;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-  }
-  
-  .danger-btn:hover {
-    opacity: 0.9;
   }
   
   .footer {
