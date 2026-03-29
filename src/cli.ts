@@ -9,7 +9,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { AgentService } from './services/agent.js';
-import { GitHubService } from './services/github.js';
+import { IssueService } from './services/issues.js';
 import { GitService } from './services/git.js';
 import { StorageService } from './services/storage.js';
 
@@ -63,16 +63,10 @@ async function main() {
   const wss = new WebSocketServer({ server });
   
   const storage = new StorageService();
-  const github = new GitHubService();
+  const issues = new IssueService();
   const git = new GitService();
   const agent = new AgentService();
-  
-  const storedToken = storage.getGithubToken();
-  if (storedToken) {
-    github.init(storedToken);
-    console.log('GitHub token loaded from storage');
-  }
-  
+
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected');
     
@@ -92,20 +86,6 @@ async function main() {
   
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
-  });
-  
-  app.post('/api/github/token', (req, res) => {
-    const { token } = req.body;
-    if (!token) {
-      return res.status(400).json({ error: 'Token required' });
-    }
-    storage.setGithubToken(token);
-    github.init(token);
-    res.json({ success: true });
-  });
-  
-  app.get('/api/github/status', (req, res) => {
-    res.json({ authenticated: github.isInitialized() });
   });
   
   app.get('/api/projects', (req, res) => {
@@ -135,17 +115,59 @@ async function main() {
     res.json({ success: true });
   });
   
-  app.get('/api/projects/:id/issues', async (req, res) => {
+  app.get('/api/projects/:id/issues', (req, res) => {
     const project = storage.getProject(req.params.id);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    try {
-      const issues = await github.getIssues(project.owner, project.repo);
-      res.json(issues);
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+    const projectIssues = issues.getIssues(req.params.id);
+    res.json(projectIssues);
+  });
+  
+  app.post('/api/projects/:id/issues', (req, res) => {
+    const project = storage.getProject(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
     }
+    const { title, body, labels } = req.body;
+    const issue = issues.createIssue(req.params.id, title, body || '', labels || []);
+    res.json(issue);
+  });
+  
+  app.patch('/api/issues/:projectId/:issueNumber', (req, res) => {
+    const { projectId, issueNumber } = req.params;
+    const issueNum = parseInt(issueNumber, 10);
+    const changes = req.body;
+    
+    if (changes.state && ['backlog', 'doing', 'review', 'done'].includes(changes.state)) {
+      const issue = issues.moveIssue(projectId, issueNum, changes.state);
+      if (!issue) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      return res.json(issue);
+    }
+    
+    const issue = issues.updateIssue(projectId, issueNum, changes);
+    if (!issue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    res.json(issue);
+  });
+  
+  app.get('/api/issues/:projectId/:issueNumber/comments', (req, res) => {
+    const { projectId, issueNumber } = req.params;
+    const comments = issues.getComments(projectId, parseInt(issueNumber, 10));
+    res.json(comments);
+  });
+  
+  app.post('/api/issues/:projectId/:issueNumber/comments', (req, res) => {
+    const { projectId, issueNumber } = req.params;
+    const { body } = req.body;
+    const comment = issues.addComment(projectId, parseInt(issueNumber, 10), body);
+    if (!comment) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    res.json(comment);
   });
   
   app.post('/api/agent/start', async (req, res) => {
@@ -156,7 +178,11 @@ async function main() {
     }
     
     try {
-      const issue = await github.getIssue(project.owner, project.repo, issueNumber);
+      const issue = issues.getIssue(projectId, issueNumber);
+      if (!issue) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      
       const worktree = await git.createWorktree(project.path, issueNumber, issue.title);
       
       const sessionId = await agent.start({

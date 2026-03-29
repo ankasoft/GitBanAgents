@@ -12,7 +12,7 @@ export interface Project {
   retryCount: number;
 }
 
-export interface GitHubIssue {
+export interface Issue {
   number: number;
   title: string;
   body: string | null;
@@ -25,12 +25,14 @@ export interface GitHubIssue {
   url: string;
 }
 
-export interface GitHubComment {
+export interface Comment {
   id: number;
   body: string;
   user: { login: string };
   created_at: string;
 }
+
+export type { Issue as GitHubIssue, Comment as GitHubComment };
 
 export interface GitWorktree {
   path: string;

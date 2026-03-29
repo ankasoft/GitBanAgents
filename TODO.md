@@ -156,17 +156,20 @@ gitban_agent/
 
 ---
 
-## 6. GitHub Service
+## 6. Local Issue Storage
 
-### 6.1 Octokit Wrapper
-- [ ] Issue CRUD
-- [ ] Comment CRUD
-- [ ] PR oluşturma
-- [ ] Rate limiting
+**Note:** We discovered that cline/kanban doesn't require a GitHub token - agents (Claude Code, Opencode) handle GitHub authentication themselves. Therefore, we store issues locally in JSON files and let agents handle all GitHub operations via CLI.
 
-### 6.2 Auth
-- [ ] PAT token storage (secure)
-- [ ] Token validation
+### 6.1 Issue Store (`~/.gitban_agent/issues/`)
+- [x] Local JSON-based issue storage
+- [x] Issue CRUD operations
+- [x] Comment support
+- [x] Label management (backlog, doing, review, done)
+
+### 6.2 Agent Integration
+- [x] Agents use their own GitHub credentials
+- [x] Worktree-based agent execution
+- [ ] Agents can read/write issues via `gh issue` CLI
 
 ---
 
