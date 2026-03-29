@@ -105,6 +105,19 @@
     await loadIssues(id);
   }
   
+  async function handleDeleteProject(id: string) {
+    try {
+      await api.deleteProject(id);
+    } catch (e) {
+      console.error('Failed to delete project from backend:', e);
+    }
+    projects.remove(id);
+    if ($currentProjectId === id) {
+      currentProjectId.set(null);
+      issues.set([]);
+    }
+  }
+  
   async function handleIssueClick(issue: GitHubIssue) {
     selectedIssue.set(issue);
     try {
@@ -217,6 +230,7 @@
         selectedId={$currentProjectId}
         onSelect={handleProjectSelect}
         onAdd={handleFolderPicker}
+        onDelete={handleDeleteProject}
       />
       
       {#if $selectedIssue}
