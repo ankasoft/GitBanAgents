@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, createWebSocket, type GitHubIssue } from './lib/api';
-  import { projects, currentProjectId, issues, selectedIssue, issueComments, agentOutput, agentStatus, currentSessionId } from './lib/stores/app';
-  import { settings } from './stores/settings';
+  import { issues, selectedIssue, issueComments, agentOutput, agentStatus, currentSessionId } from './lib/stores/app';
+  import { settings, projects, currentProjectId, type Project } from './stores/settings';
   import Board from './components/Kanban/Board.svelte';
   import ProjectColumn from './components/Kanban/ProjectColumn.svelte';
   import SplitView from './components/IssueDetail/SplitView.svelte';
@@ -11,8 +11,8 @@
   
   let showSettings = false;
   let showNewIssue = false;
-  let loading = true;
   let projectIssues = { backlog: 0, doing: 0, review: 0, done: 0 };
+  let folderInput: HTMLInputElement;
   
   let ws: WebSocket | null = null;
   
@@ -25,22 +25,39 @@
       }
     });
     
-    loadProjects();
-    
     return () => {
       ws?.close();
     };
   });
   
-  async function loadProjects() {
-    try {
-      const data = await api.getProjects();
-      projects.set(data);
-      loading = false;
-    } catch (e) {
-      console.error('Failed to load projects:', e);
-      loading = false;
-    }
+  function handleFolderSelect() {
+    folderInput?.click();
+  }
+  
+  async   function handleFolderChosen(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    
+    const path = files[0].webkitRelativePath.split('/')[0];
+    const fullPath = files[0].path || path;
+    
+    const newProject: Project = {
+      id: crypto.randomUUID(),
+      name: path,
+      path: fullPath || path,
+      owner: '',
+      repo: '',
+      agent: 'claude',
+      autoPR: false,
+      baseBranch: 'main',
+      customAgentArgs: '',
+      timeout: 1800,
+      retryCount: 2,
+    };
+    
+    projects.add(newProject);
+    input.value = '';
   }
   
   async function loadIssues(projectId: string) {
@@ -75,24 +92,6 @@
   async function handleProjectSelect(id: string) {
     currentProjectId.set(id);
     await loadIssues(id);
-  }
-  
-  async function handleAddProject() {
-    const path = prompt('Enter project path (must be a git repo):');
-    if (!path) return;
-    
-    try {
-      await api.addProject({
-        name: path.split('/').pop() || path,
-        path,
-        owner: '',
-        repo: '',
-        agentType: 'claude',
-      });
-      await loadProjects();
-    } catch (e) {
-      console.error('Failed to add project:', e);
-    }
   }
   
   async function handleIssueClick(issue: GitHubIssue) {
@@ -176,6 +175,15 @@
   }
 </script>
 
+<input
+  type="file"
+  accept="*"
+  webkitdirectory
+  bind:this={folderInput}
+  on:change={handleFolderChosen}
+  style="display: none;"
+/>
+
 <main data-theme={$settings.theme === 'dark' ? 'dark' : $settings.theme === 'light' ? 'light' : ''}>
   <div class="app">
     <header class="topbar">
@@ -196,7 +204,7 @@
         projects={$projects}
         selectedId={$currentProjectId}
         onSelect={handleProjectSelect}
-        onAdd={handleAddProject}
+        onAdd={handleFolderSelect}
       />
       
       {#if $selectedIssue}

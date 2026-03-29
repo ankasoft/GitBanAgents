@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Project } from '../../lib/api';
+  import type { Project } from '../../stores/settings';
   
   export let projects: Project[] = [];
   export let selectedId: string | null = null;
@@ -10,7 +10,7 @@
 <div class="project-column">
   <div class="header">
     <span class="title">Projects</span>
-    <button class="add-btn" on:click={onAdd}>+</button>
+    <button class="add-btn" on:click={onAdd} title="Add local folder">+</button>
   </div>
   <div class="list">
     {#each projects as project (project.id)}
@@ -20,13 +20,13 @@
         on:click={() => onSelect(project.id)}
       >
         <span class="name">{project.name}</span>
-        <span class="meta">
-          {project.repo}
+        <span class="meta" title={project.path}>
+          {project.path}
         </span>
       </button>
     {/each}
     {#if projects.length === 0}
-      <div class="empty">No projects added</div>
+      <div class="empty">Click + to add a folder</div>
     {/if}
   </div>
 </div>
