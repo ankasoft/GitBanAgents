@@ -6,8 +6,8 @@
   export let color: string;
   export let issues: GitHubIssue[] = [];
   export let onIssueClick: (issue: GitHubIssue) => void = () => {};
-  export let onPlay?: (issue: GitHubIssue) => void;
-  export let onDrop?: (e: DragEvent) => void;
+  export let onPlay: ((issue: GitHubIssue) => void) | undefined = undefined;
+  export let onDrop: ((e: DragEvent) => void) | undefined = undefined;
   
   let isDragOver = false;
   
