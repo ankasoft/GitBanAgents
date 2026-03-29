@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000';
+const API_BASE = '';
 
 export interface Project {
   id: string;
@@ -140,7 +140,7 @@ export type WsMessage = {
 };
 
 export function createWebSocket(onMessage: (msg: WsMessage) => void): WebSocket {
-  const ws = new WebSocket('ws://localhost:3000/ws');
+  const ws = new WebSocket(`ws://${window.location.host}/ws`);
   
   ws.onmessage = (event) => {
     try {

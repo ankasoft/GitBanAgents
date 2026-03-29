@@ -67,6 +67,12 @@ async function main() {
   const git = new GitService();
   const agent = new AgentService();
   
+  const storedToken = storage.getGithubToken();
+  if (storedToken) {
+    github.init(storedToken);
+    console.log('GitHub token loaded from storage');
+  }
+  
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected');
     
@@ -86,6 +92,20 @@ async function main() {
   
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
+  });
+  
+  app.post('/api/github/token', (req, res) => {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Token required' });
+    }
+    storage.setGithubToken(token);
+    github.init(token);
+    res.json({ success: true });
+  });
+  
+  app.get('/api/github/status', (req, res) => {
+    res.json({ authenticated: github.isInitialized() });
   });
   
   app.get('/api/projects', (req, res) => {
