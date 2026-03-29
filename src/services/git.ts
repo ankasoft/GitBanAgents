@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { join } from 'path';
+import { join, resolve } from 'path';
+import { homedir } from 'os';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import type { GitWorktree, Issue, Comment } from '../types/index.js';
 
@@ -20,6 +21,17 @@ export interface GhIssue {
 }
 
 export class GitService {
+  resolveRepoPath(repoPath: string): string {
+    if (existsSync(repoPath)) {
+      return resolve(repoPath);
+    }
+    const projectsPath = join(homedir(), 'Documents', 'projects');
+    const fullPath = resolve(projectsPath, repoPath);
+    if (existsSync(fullPath)) {
+      return fullPath;
+    }
+    return resolve(repoPath);
+  }
   async getRemoteUrl(repoPath: string): Promise<{ owner: string; repo: string } | null> {
     try {
       const { stdout } = await execAsync('git remote get-url origin', { cwd: repoPath });
@@ -141,9 +153,10 @@ export class GitService {
 
   async getGitHubIssues(repoPath: string): Promise<GhIssue[]> {
     try {
+      const resolvedPath = this.resolveRepoPath(repoPath);
       const { stdout } = await execAsync(
         'gh issue list --json number,title,body,state,labels,assignees,createdAt,updatedAt,comments,url',
-        { cwd: repoPath }
+        { cwd: resolvedPath }
       );
       const issues = JSON.parse(stdout);
       return issues.map((issue: any) => ({
@@ -166,10 +179,11 @@ export class GitService {
 
   async createGitHubIssue(repoPath: string, title: string, body: string, labels: string[] = []): Promise<GhIssue | null> {
     try {
+      const resolvedPath = this.resolveRepoPath(repoPath);
       const labelArg = labels.length > 0 ? `--label "${labels.join(',')}"` : '';
       const { stdout } = await execAsync(
         `gh issue create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" ${labelArg} --json number,title,body,state,labels,assignees,createdAt,updatedAt,comments,url`,
-        { cwd: repoPath }
+        { cwd: resolvedPath }
       );
       const issue = JSON.parse(stdout);
       return {
@@ -192,7 +206,8 @@ export class GitService {
 
   async closeGitHubIssue(repoPath: string, issueNumber: number): Promise<boolean> {
     try {
-      await execAsync(`gh issue close ${issueNumber}`, { cwd: repoPath });
+      const resolvedPath = this.resolveRepoPath(repoPath);
+      await execAsync(`gh issue close ${issueNumber}`, { cwd: resolvedPath });
       return true;
     } catch (e) {
       console.error('Failed to close GitHub issue:', e);

@@ -100,16 +100,17 @@ async function main() {
       return res.status(400).json({ error: 'Path is required' });
     }
     
-    const isGit = await git.isGitRepo(path);
+    const resolvedPath = git.resolveRepoPath(path);
+    const isGit = await git.isGitRepo(resolvedPath);
     if (!isGit) {
       return res.status(400).json({ error: 'Selected folder is not a git repository. Please run "git init" first.' });
     }
     
-    const repoInfo = await git.getRepoInfo(path);
+    const repoInfo = await git.getRepoInfo(resolvedPath);
     
     const project = storage.addProject({ 
-      name: name || path.split(/[/\\]/).pop() || 'Project', 
-      path, 
+      name: name || resolvedPath.split(/[/\\]/).pop() || 'Project', 
+      path: resolvedPath, 
       owner: repoInfo?.owner || '',
       repo: repoInfo?.repo || '',
       agentType: agentType || 'claude',
