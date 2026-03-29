@@ -43,8 +43,13 @@ function parseCliOptions(): CliOptions {
 
 function openBrowser(url: string): void {
   const platform = process.platform;
-  const cmd = platform === 'win32' ? 'start' : platform === 'darwin' ? 'open' : 'xdg-open';
-  spawn(cmd, [url], { stdio: 'ignore', detached: true });
+  if (platform === 'win32') {
+    spawn('cmd', ['/c', 'start', url], { stdio: 'ignore', detached: true });
+  } else if (platform === 'darwin') {
+    spawn('open', [url], { stdio: 'ignore', detached: true });
+  } else {
+    spawn('xdg-open', [url], { stdio: 'ignore', detached: true });
+  }
 }
 
 async function main() {
@@ -90,7 +95,18 @@ async function main() {
   
   app.post('/api/projects', (req, res) => {
     const { name, path, owner, repo, agentType } = req.body;
-    const project = storage.addProject({ name, path, owner, repo, agentType });
+    const project = storage.addProject({ 
+      name, 
+      path, 
+      owner, 
+      repo, 
+      agentType: agentType || 'claude',
+      autoPR: false,
+      baseBranch: 'main',
+      customAgentArgs: '',
+      timeout: 1800,
+      retryCount: 2,
+    });
     res.json(project);
   });
   
